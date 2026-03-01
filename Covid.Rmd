@@ -1,0 +1,109 @@
+---
+title: "Final_Project_2_Covid_19_Data"
+author: "Mike Schaefer"
+date: "2026-03-01"
+output: html_document
+---
+
+## Get Data from Johns Hopkins 
+```{r get_jhu_data, message = FALSE}
+## Get current data in the four files
+# They all begin the same way
+library(tidyverse)
+library(lubridate)
+library(scales)
+url_in <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/refs/heads/master/csse_covid_19_data/csse_covid_19_time_series/"
+file_names <-c("time_series_covid19_confirmed_US.csv","time_series_covid19_confirmed_global.csv", "time_series_covid19_deaths_US.csv", "time_series_covid19_deaths_global.csv")
+urls <- str_c(url_in,file_names)
+```
+
+```{r import_data, message = FALSE}
+global_cases <- read_csv(urls[2])
+global_deaths <- read_csv(urls[4])
+```
+
+## Combine global cases and global deaths into one file
+```{r tidy_global_data}
+
+global_cases <- global_cases %>%
+  pivot_longer(cols = -c(`Province/State`, `Country/Region`, Lat, Long),
+               names_to = "date",
+               values_to = "cases")
+
+global_deaths <- global_deaths %>%
+  pivot_longer(cols = -c(`Province/State`, `Country/Region`, Lat, Long),
+               names_to = "date",
+               values_to = "deaths")
+
+global <- global_cases %>%
+  full_join(global_deaths, by = c("Province/State", "Country/Region", "Lat", "Long", "date")) %>%
+  rename(Country_Region = `Country/Region`,
+         Province_State = `Province/State`) %>%
+  mutate(date = mdy(date))
+
+global <- global %>% filter(cases > 0)
+
+glimpse(global)
+summary(global)
+```
+
+## Covid Analysis 
+
+After looking at the global data I wanted to see what cases and deaths looked like along two latitudinal bands.  The tropical zone between -15 and 15 degrees and the more temperate band between 45-60 (note there is very little land mass between -45 and -60 degrees and is left out of this analysis).  My suspicion is that the tropical band will have less cases/deaths.  Likely due to warmer weather year round allowing for outdoor activity and social distancing.  Also UV rays from the sun can eliminate pathogens.    
+
+```{r Analysis, fig.width=15, fig.height=7}
+# Create latitude groups and filter
+lat_comparison <- global %>%
+  mutate(lat_group = case_when(
+    Lat >= -15 & Lat <= 15 ~ "Tropical (15S - 15N)",
+    Lat >= 45 & Lat <= 60 ~ "North Temperate (45N - 60N)",
+    TRUE ~ "Other"
+  )) %>%
+  filter(lat_group != "Other")
+
+# Summarize totals by date and latitude group
+lat_summary <- lat_comparison %>%
+  group_by(date, lat_group) %>%
+  summarise(total_cases = sum(cases, na.rm = TRUE),
+            total_deaths = sum(deaths, na.rm = TRUE),
+            .groups = 'drop')
+
+glimpse(lat_comparison)
+glimpse(lat_summary)
+
+# Visualize Cases over time
+ggplot(lat_summary, aes(x = date, y = total_cases, color = lat_group)) +
+  geom_line(size = 1) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Total COVID-19 Cases by Latitude Band",
+       subtitle = "Comparing Equatorial vs. Northern Temperate Regions",
+       x = "Date",
+       y = "Confirmed Cases",
+       color = "Latitude Band") +
+  theme_minimal()
+
+# Visualize Deaths over time
+ggplot(lat_summary, aes(x = date, y = total_deaths, color = lat_group)) +
+  geom_line(size = 1) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Total COVID-19 Deaths by Latitude Band",
+       x = "Date",
+       y = "Confirmed Deaths",
+       color = "Latitude Band") +
+  theme_minimal()
+```
+
+## Covid Conclusion 
+The analysis produced some interesting results. In the early stages both latitudinal bands seem to be in line for both cases and deaths.  For confirmed cases as time moved forward we can see that the tropical band does seem to support my suspicion with tropical band cases leveling off to a lower rate than that of the temperate band.  However, when we move on to deaths we can see that the tropical band does worse over time leading to a higher rate of death than that of the temperate band.  
+
+I believe that further analysis is needed in this space, perhaps looking at what countries reside in these bands, how densely populated they are, and if the vaccine was made easily available.  
+
+## Bias
+The most obvious bias here is my location.  I live in the temperate band often dream of warm tropical weather.  That appears to have influenced my prior suspicion/hypothoses.
+
+
+
+
+
+
+               
