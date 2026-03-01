@@ -1,0 +1,115 @@
+---
+title: "NYPD Shooting Incident Data (Historic)"
+author: "Mike Schaefer"
+date: "2026-01-31"
+output: html_document
+---
+
+## NYPD Shooting Incident Data (Historic)
+### Get data and format as needed
+```{r get_nypd_data, message=FALSE}
+library(tidyverse)
+
+url_in <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+shooting_data <- read_csv(url_in)
+spec(shooting_data)
+
+### Change date column from chr to date
+shooting_data$OCCUR_DATE <- as.Date(shooting_data$OCCUR_DATE, format = "%m/%d/%Y")
+
+### Removed unwanted columns
+shooting_data <- shooting_data %>% select(-c(Latitude, Longitude, X_COORD_CD, Y_COORD_CD, Lon_Lat))
+
+### See column data
+glimpse(shooting_data)
+
+### See Summary
+summary(shooting_data)
+
+```
+
+### Analysis
+
+I would like to know if there is a difference in the number of shooting incidents when comparing two holidays.  For this I have chosen the 4th of July and Christmas.  I chose these holidays because one is in the summer and one is in the winter and people tend to gather in groups to celebrate them.  
+
+In the code chunk below I have isolated the two holidays and created a holiday summary file showing incidents by holiday by year.  I then further modify the set to inclue Borough information.  This sets the data up for my bisualizations further down the document.    
+
+
+```{r analysis, message=FALSE}
+library(lubridate)
+
+July_4th_data <- shooting_data %>%
+filter(month(OCCUR_DATE) == 7 & day(OCCUR_DATE) == 4)
+
+December_25_data <- shooting_data %>%
+filter(month(OCCUR_DATE) == 12 & day(OCCUR_DATE) == 25)
+
+cat("July 4th Incidents:", nrow(July_4th_data), "\n")
+cat("Christmas Day Incidents:", nrow(December_25_data), "\n")
+
+comparison <- bind_rows(
+  July_4th_data %>% mutate(Holiday = "July 4th"),
+  December_25_data %>% mutate(Holiday = "Christmas")
+)
+
+# Create Holiday Summary for Visualization
+holiday_summary <- comparison %>%
+  mutate(Year = year(OCCUR_DATE)) %>%
+  group_by(Year, Holiday) %>%
+  tally()
+
+# Create Holiday by Boro for Visualization
+holiday_boro_summary <- comparison %>%
+  mutate(Year = year(OCCUR_DATE)) %>%
+  group_by(Year, Holiday, BORO) %>%
+  tally()
+
+
+holiday_boro_complete <- holiday_boro_summary %>%
+  ungroup() %>%
+  tidyr::complete(Year, BORO, Holiday, fill = list(n = 0))
+
+
+```
+
+
+### Visuals 
+```{r show_visuals, message=FALSE, fig.width=15, fig.height=7}
+ggplot(holiday_summary, aes(x = factor(Year), y = n, fill = Holiday)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Shooting Incidents: July 4th vs Christmas Day",
+       x = "Year",
+       y = "Number of Incidents",
+       fill = "Holiday") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+ggplot(holiday_boro_complete, aes(x = interaction(BORO, Year), y = n, fill = Holiday)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "NYPD Shooting Incidents by Year and Borough",
+    x = "Borough by Year",
+    y = "Incident Count",
+    fill = "Holiday"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 8))
+
+
+```
+
+### Conclutions and Bias
+#### Conclusion
+For my analysis I wanted to look at two holidays and see what their shooting data looked like.  The two holidays I chose were July 4th, and Christmas.  I chose these because most people have off work and tend to gather in groups to celebrate (even if they are not christian).  The data shows that more shooting will take place on July 4th.  I would hypothesize this may have something to do with the weather, or perhaps what types of gatherings are held on given the two holidays.  
+
+
+#### Bias 
+I am a 45 year old white man and a self described Bernie Bro.  Given my political leanings I have a healthy skepticism of law enforcement.  It was in fact the first thing I thought of when I read the webpage where we downloaded the data from.  Other sources of possible bias I could think of all related to the data that we were looking at.  For example age, race, gender, and even location. 
+
+
+
+
+
+
+
